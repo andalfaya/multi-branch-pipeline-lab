@@ -29,20 +29,24 @@ jobs:
       - name: 🔍 Validate Dockerfile
         run: |
           echo "✅ Validating Dockerfile..."
-          # Check if Dockerfile exists
           if [ ! -f "Dockerfile" ]; then
             echo "❌ Dockerfile not found!"
             exit 1
           fi
-          # Validate Dockerfile syntax using hadolint (if available) or basic checks
           echo "📋 Dockerfile found and readable"
           echo "🔍 Basic validation completed"
         shell: bash
 
-      - name: 📦 Build Docker image
+      - name: 📦 Build Docker image for testing
         run: |
           echo "🔨 Building image for environment: $ENVIRONMENT"
-          docker build -t $IMAGE_NAME:$ENVIRONMENT .
+          # Build local image solo para pruebas unitarias, sin tag de registry
+          docker build -t simple-app-test:$ENVIRONMENT .
+          # Opcional: correr tests dentro del contenedor si quieres
+          # docker run --rm simple-app-test:$ENVIRONMENT pytest tests/
+          echo "🧹 Cleaning up test image"
+          docker rmi simple-app-test:$ENVIRONMENT || true
+          docker builder prune -f
         shell: bash
 
   # Job 2: Push to Registry
@@ -61,6 +65,8 @@ jobs:
 
       - name: 🔧 Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          install: true
 
       - name: 🔑 Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -72,8 +78,11 @@ jobs:
       - name: 📦 Build and push Docker image
         run: |
           echo "🚀 Building and pushing image: $IMAGE_NAME:$ENVIRONMENT"
-          docker build -t $IMAGE_NAME:$ENVIRONMENT .
-          docker push $IMAGE_NAME:$ENVIRONMENT
+          # Construir y subir al registry directamente
+          docker buildx build --push -t $IMAGE_NAME:$ENVIRONMENT .
+          echo "🧹 Cleaning up local images and cache"
+          docker rmi $IMAGE_NAME:$ENVIRONMENT || true
+          docker builder prune -f
         shell: bash
 
   # Job 3: Update Manifests
